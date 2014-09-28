@@ -28,6 +28,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //=================================================================================================
 
+#ifndef HECTOR_TIMING_H
+#define HECTOR_TIMING_H
+
 #include <hector_diagnostic_msgs/TimingInfo.h>
 
 #include <map>
@@ -270,3 +273,5 @@ public:
 
 } // namespace serialization
 } // namespace ros
+
+#endif // HECTOR_TIMING_H
