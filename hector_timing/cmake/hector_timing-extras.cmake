@@ -1,4 +1,4 @@
-option(USE_HECTOR_TIMING "Compile with hector_timing support. This will add the USE_HECTOR_TIMING define flag and link to hector_timing." ON)
+option(USE_HECTOR_TIMING "Compile with hector_timing support. This will add the USE_HECTOR_TIMING define flag and link to hector_timing." OFF)
 if(USE_HECTOR_TIMING)
   message(STATUS "Building with hector_timing support.")
   add_definitions(-DUSE_HECTOR_TIMING)
