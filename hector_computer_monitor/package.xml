@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package>
+  <name>hector_computer_monitor</name>
+  <version>0.0.0</version>
+  <description>The hector_computer_monitor package. Based on and major parts from pr2_computer_monitor. Slight modifications to reduce the number of hard-coded variables.</description>
+
+  <maintainer email="kohlbrecher@sim.tu-darmstadt.de">Stefan Kohlbrecher</maintainer>
+  
+  <author email="kohlbrecher@sim.tu-darmstadt.de">Stefan Kohlbrecher</author>
+  <author email="christian.rose@stud.tu-darmstadt.de">Christian Rose</author>
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>diagnostic_msgs</build_depend>
+  <build_depend>rospy</build_depend>
+  <run_depend>diagnostic_msgs</run_depend>
+  <run_depend>rospy</run_depend>
+
+  <export>
+  </export>
+</package>

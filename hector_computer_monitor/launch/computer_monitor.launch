@@ -1,0 +1,20 @@
+<launch>
+  <node name="cpu_monitor" pkg="hector_computer_monitor" type="cpu_monitor.py" output="screen" >
+    <param name="num_cores" value="-1" /> <!-- disable core number check -->
+    <param name="check_ipmi_tool" value="false" />
+    <param name="enforce_clock_speed" value="false" />
+    <param name="check_core_temps" value="true" />
+    <param name="cpu_warm_warn_threshold" value="100" />
+    <param name="cpu_hot_error_threshold" value="105" />
+    <param name="load1_threshold" value="10.5" />
+    <param name="load5_threshold" value="9.0" />
+  </node>
+
+  <node name="hd_monitor" pkg="hector_computer_monitor" type="hd_monitor.py" args="/opt" output="screen"> <!-- There args is used to specify the home directory. Used for disk usage check-->
+    <param name="num_cores" value="-1" /> <!-- disable core number check -->
+    <param name="check_ipmi_tool" value="false" />
+    <param name="enforce_clock_speed" value="false" />
+    <param name="check_core_temps" value="true" />
+  </node>
+
+</launch>

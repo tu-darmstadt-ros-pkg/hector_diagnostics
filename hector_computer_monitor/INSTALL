@@ -1,0 +1,15 @@
+# For hddtemp:
+
+sudo apt-get install hddtemp
+
+sudo dpkg-reconfigure hddtemp
+
+> Should /usr/sbin/hddtemp be installed SUID root? <No>
+
+> Interval between hard drive temperature checks: 0
+
+> Should the hddtemp daemon be started at boot? <Yes>
+
+> Interface to listen on: 127.0.0.1
+
+> Port to listen on: 7634
