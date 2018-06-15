@@ -97,6 +97,7 @@ std::unique_ptr<Timer::TimerResult<T>> Timer::time( const std::function<T(void)>
   long time = internalGetDuration( start, std::chrono::high_resolution_clock::now(), time_unit );
   std::unique_ptr<Timer::TimerResult<T> > result(new Timer::TimerResult<T>());
   result->time = time;
+  result->time_unit = time_unit;
   result->result.reset(new T(function_result));
   return result;
 }

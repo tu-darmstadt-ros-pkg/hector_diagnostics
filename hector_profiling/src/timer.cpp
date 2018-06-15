@@ -67,7 +67,7 @@ long Timer::getElapsedTime() const
   long result = elapsed_time_;
   if ( running_ )
     result += internalGetDuration( start_, std::chrono::high_resolution_clock::now(), clock_time_unit_ );
-  return elapsed_time_;
+  return result;
 }
 
 std::vector<long> Timer::getRunTimes() const
@@ -89,6 +89,7 @@ std::unique_ptr<Timer::TimerResult<void>> Timer::time<void>( const std::function
   long time = internalGetDuration( start, std::chrono::high_resolution_clock::now(), time_unit );
   std::unique_ptr<Timer::TimerResult<void> > result( new Timer::TimerResult<void>());
   result->time = time;
+  result->time_unit = time_unit;
   return result;
 }
 
@@ -184,7 +185,7 @@ void printTimeString(std::stringstream &stream, T time, Timer::TimeUnit clock_ti
           stream << time << " seconds";
           break;
         case Timer::Microseconds:
-          if ( time < 5000 )
+          if ( time < 2000 )
           {
             stream << time << " us";
           }
@@ -198,7 +199,7 @@ void printTimeString(std::stringstream &stream, T time, Timer::TimeUnit clock_ti
           }
           break;
         case Timer::Nanoseconds:
-          if ( time < 5000 )
+          if ( time < 2000 )
           {
             stream << time << " ns";
           }
@@ -217,7 +218,7 @@ void printTimeString(std::stringstream &stream, T time, Timer::TimeUnit clock_ti
           break;
         case Timer::Milliseconds:
         default:
-          if ( time < 5000 )
+          if ( time < 2000 )
           {
             stream << time << " ms";
           }
