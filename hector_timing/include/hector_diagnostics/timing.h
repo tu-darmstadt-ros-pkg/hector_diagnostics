@@ -47,7 +47,7 @@ using namespace hector_diagnostic_msgs;
 class TimingSection;
 
 /**
- * @brief TimingAggregator is the container for a hector_diagnositics_msgs::TimingInfo message.
+ * @brief TimingAggregator is the container for a hector_diagnostics_msgs::TimingInfo message.
  * It collects the timing results from all sections that have been executed.
  */
 class TimingAggregator
