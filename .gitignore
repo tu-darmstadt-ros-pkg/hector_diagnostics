@@ -1,0 +1,4 @@
+# Ignore idea and vscode config files
+.idea/
+cmake-build-debug/
+.vscode/
