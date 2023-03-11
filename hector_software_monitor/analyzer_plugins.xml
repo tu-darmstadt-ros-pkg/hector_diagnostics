@@ -1,0 +1,17 @@
+<library path="lib/libhector_software_monitor" >
+  <class name="hector_software_monitor/TopicFrequencyAnalyzer"
+         type="hector_software_monitor::TopicFrequencyAnalyzer"
+         base_class_type="diagnostic_aggregator::Analyzer">
+    <description>
+      An analyzer that compares the current publish rate of a topic to the desired rate and sets the corresponding status level.
+    </description>
+  </class>
+
+  <class name="hector_software_monitor/SimpleAnalyzer"
+           type="hector_software_monitor::SimpleAnalyzer"
+           base_class_type="diagnostic_aggregator::Analyzer">
+      <description>
+        A simple example for the usage of analyzers.
+      </description>
+    </class>
+</library>
