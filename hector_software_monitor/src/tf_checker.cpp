@@ -3,7 +3,7 @@
 namespace hector_software_monitor
 {
 TFChecker::RequiredTransform::RequiredTransform(std::string source_frame, std::string target_frame, double timeout)
-  : source_frame(source_frame), target_frame(target_frame), timeout(timeout)
+  : source_frame(source_frame), target_frame(target_frame), timeout(timeout), is_static(false)
 {
 }
 
@@ -62,11 +62,12 @@ TFChecker::TFChecker() : tf_listener_(tf_buffer_)
 
   std::stringstream info_stream;
   for (const auto& transform : transforms_)
-    info_stream << "> " << transform.source_frame << "->" << transform.target_frame
-                << ", timeout: " << transform.timeout << std::endl;
+    info_stream << "> " << transform.source_frame << " -> " << transform.target_frame
+                << " | timeout: " << transform.timeout << std::endl;
   ROS_INFO("[TF_Checker] Watching the following tf transforms:\n%s", info_stream.str().c_str());
 
   // Setup publisher and timer
+  tf_static_sub_ = nh.subscribe("/tf_static", 100, &TFChecker::TFStaticCallback, this);
   diagnostics_pub_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics", 10);
   publish_timer_ = nh.createTimer(ros::Duration(1.0), &TFChecker::timerCallback, this);
 }
@@ -93,19 +94,54 @@ void TFChecker::timerCallback(const ros::TimerEvent& event)
     }
 
     // If transform exists, check time stamp
+    ros::Duration dt;
     if (transform_found)
-      status = event.current_expected - tf_msg.header.stamp <= transform.timeout;
+    {
+      // Static transforms don't need a recent time stamp
+      if (transform.is_static)
+        status = true;
+      else
+      {
+        dt = event.current_expected - tf_msg.header.stamp;
+        status = dt <= transform.timeout;
+      }
+    }
 
     diagnostic_msgs::DiagnosticStatus diag_status;
-    diag_status.name = "tf:: " + transform.source_frame + " -> " + transform.target_frame;
+    diag_status.name = "tf::" + transform.source_frame + "->" + transform.target_frame;
     diag_status.level = status ? diagnostic_msgs::DiagnosticStatus::OK : diagnostic_msgs::DiagnosticStatus::ERROR;
-    diag_status.message = status ? "OK" : "Transform not available";
+    if (status)
+      diag_status.message = "OK";
+    else if (transform_found)
+      diag_status.message = "Last message received " + std::to_string(int(dt.toSec())) + " seconds ago";
+    else
+      diag_status.message = "Transform not available";
+    if (transform.is_static)
+      diag_status.message += " (static)";
 
     diag_array.status.push_back(diag_status);
   }
 
   diag_array.header.stamp = event.current_expected;
   diagnostics_pub_.publish(diag_array);
+}
+
+void TFChecker::TFStaticCallback(const tf2_msgs::TFMessageConstPtr& msg)
+{
+  for (const auto& transformStamped : msg->transforms)
+  {
+    std::string source = transformStamped.header.frame_id;
+    std::string target = transformStamped.child_frame_id;
+
+    // Check if we are listening to this transform
+    for (auto& subscribed_transform : transforms_)
+    {
+      if (source == subscribed_transform.source_frame && target == subscribed_transform.target_frame)
+      {
+        subscribed_transform.is_static = true;
+      }
+    }
+  }
 }
 
 }  // namespace hector_software_monitor

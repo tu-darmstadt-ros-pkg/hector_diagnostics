@@ -23,6 +23,7 @@ public:
     std::string source_frame;
     std::string target_frame;
     ros::Duration timeout;
+    bool is_static;
   };
 
   TFChecker();
@@ -35,6 +36,8 @@ private:
    */
   void timerCallback(const ros::TimerEvent& event);
 
+  void TFStaticCallback(const tf2_msgs::TFMessageConstPtr& msg);
+
   std::vector<RequiredTransform> transforms_;
 
   tf2_ros::Buffer tf_buffer_;
@@ -42,6 +45,7 @@ private:
 
   ros::Timer publish_timer_;
   ros::Publisher diagnostics_pub_;
+  ros::Subscriber tf_static_sub_;
 };
 
 }  // namespace hector_software_monitor
