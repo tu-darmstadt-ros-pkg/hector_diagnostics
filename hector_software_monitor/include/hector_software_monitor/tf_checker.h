@@ -15,6 +15,9 @@ namespace hector_software_monitor
 class TFChecker
 {
 public:
+  /**
+   * @brief The RequiredTransform class stores information about the transform that should be checked
+   */
   struct RequiredTransform
   {
     RequiredTransform(std::string source_frame, std::string target_frame, double timeout);
@@ -22,7 +25,15 @@ public:
 
     std::string source_frame;
     std::string target_frame;
+
+    /**
+     * @brief timeout After this duration without receiving a new message, the transform is marked as stale
+     */
     ros::Duration timeout;
+
+    /**
+     * @brief is_static indicates whether a topic was published on tf_static
+     */
     bool is_static;
   };
 
@@ -36,6 +47,10 @@ private:
    */
   void timerCallback(const ros::TimerEvent& event);
 
+  /**
+   * @brief TFStaticCallback  A callback method for topic tf_static to determine which of the required transforms are
+   * static and thus not to be checked for time out
+   */
   void TFStaticCallback(const tf2_msgs::TFMessageConstPtr& msg);
 
   std::vector<RequiredTransform> transforms_;

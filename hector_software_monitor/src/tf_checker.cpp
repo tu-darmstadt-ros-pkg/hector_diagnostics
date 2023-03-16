@@ -66,7 +66,7 @@ TFChecker::TFChecker() : tf_listener_(tf_buffer_)
                 << " | timeout: " << transform.timeout << std::endl;
   ROS_INFO("[TF_Checker] Watching the following tf transforms:\n%s", info_stream.str().c_str());
 
-  // Setup publisher and timer
+  // Setup subscriber, publisher and timer
   tf_static_sub_ = nh.subscribe("/tf_static", 100, &TFChecker::TFStaticCallback, this);
   diagnostics_pub_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics", 10);
   publish_timer_ = nh.createTimer(ros::Duration(1.0), &TFChecker::timerCallback, this);
@@ -107,6 +107,7 @@ void TFChecker::timerCallback(const ros::TimerEvent& event)
       }
     }
 
+    // Fill status message
     diagnostic_msgs::DiagnosticStatus diag_status;
     diag_status.name = "tf::" + transform.source_frame + "->" + transform.target_frame;
     diag_status.level = status ? diagnostic_msgs::DiagnosticStatus::OK : diagnostic_msgs::DiagnosticStatus::ERROR;
@@ -122,6 +123,7 @@ void TFChecker::timerCallback(const ros::TimerEvent& event)
     diag_array.status.push_back(diag_status);
   }
 
+  // Publish array
   diag_array.header.stamp = event.current_expected;
   diagnostics_pub_.publish(diag_array);
 }
@@ -135,12 +137,8 @@ void TFChecker::TFStaticCallback(const tf2_msgs::TFMessageConstPtr& msg)
 
     // Check if we are listening to this transform
     for (auto& subscribed_transform : transforms_)
-    {
       if (source == subscribed_transform.source_frame && target == subscribed_transform.target_frame)
-      {
         subscribed_transform.is_static = true;
-      }
-    }
   }
 }
 
