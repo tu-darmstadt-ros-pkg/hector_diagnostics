@@ -30,11 +30,6 @@ public:
      * @brief timeout After this duration without receiving a new message, the transform is marked as stale
      */
     ros::Duration timeout;
-
-    /**
-     * @brief is_static indicates whether a topic was published on tf_static
-     */
-    bool is_static;
   };
 
   TFChecker();
@@ -47,12 +42,6 @@ private:
    */
   void timerCallback(const ros::TimerEvent& event);
 
-  /**
-   * @brief TFStaticCallback  A callback method for topic tf_static to determine which of the required transforms are
-   * static and thus not to be checked for time out
-   */
-  void TFStaticCallback(const tf2_msgs::TFMessageConstPtr& msg);
-
   std::vector<RequiredTransform> transforms_;
 
   tf2_ros::Buffer tf_buffer_;
@@ -60,7 +49,6 @@ private:
 
   ros::Timer publish_timer_;
   ros::Publisher diagnostics_pub_;
-  ros::Subscriber tf_static_sub_;
 };
 
 }  // namespace hector_software_monitor

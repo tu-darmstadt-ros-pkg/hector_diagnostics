@@ -3,7 +3,7 @@
 namespace hector_software_monitor
 {
 TFChecker::RequiredTransform::RequiredTransform(std::string source_frame, std::string target_frame, double timeout)
-  : source_frame(source_frame), target_frame(target_frame), timeout(timeout), is_static(false)
+  : source_frame(source_frame), target_frame(target_frame), timeout(timeout)
 {
 }
 
@@ -67,7 +67,6 @@ TFChecker::TFChecker() : tf_listener_(tf_buffer_)
   ROS_INFO("[TF_Checker] Watching the following tf transforms:\n%s", info_stream.str().c_str());
 
   // Setup subscriber, publisher and timer
-  tf_static_sub_ = nh.subscribe("/tf_static", 100, &TFChecker::TFStaticCallback, this);
   diagnostics_pub_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics", 10);
   publish_timer_ = nh.createTimer(ros::Duration(1.0), &TFChecker::timerCallback, this);
 }
@@ -94,12 +93,17 @@ void TFChecker::timerCallback(const ros::TimerEvent& event)
     }
 
     // If transform exists, check time stamp
+    bool is_static = false;
     ros::Duration dt;
     if (transform_found)
     {
-      // Static transforms don't need a recent time stamp
-      if (transform.is_static)
+      // tf_static msgs always have stamp 0
+      if (tf_msg.header.stamp == ros::Time(0))
+      {
+        is_static = true;
         status = true;
+      }
+      // for non static msgs check time since last update
       else
       {
         dt = event.current_expected - tf_msg.header.stamp;
@@ -117,7 +121,7 @@ void TFChecker::timerCallback(const ros::TimerEvent& event)
       diag_status.message = "Last message received " + std::to_string(int(dt.toSec())) + " seconds ago";
     else
       diag_status.message = "Transform not available";
-    if (transform.is_static)
+    if (is_static)
       diag_status.message += " (static)";
 
     diag_array.status.push_back(diag_status);
@@ -127,21 +131,6 @@ void TFChecker::timerCallback(const ros::TimerEvent& event)
   diag_array.header.stamp = event.current_expected;
   diagnostics_pub_.publish(diag_array);
 }
-
-void TFChecker::TFStaticCallback(const tf2_msgs::TFMessageConstPtr& msg)
-{
-  for (const auto& transformStamped : msg->transforms)
-  {
-    std::string source = transformStamped.header.frame_id;
-    std::string target = transformStamped.child_frame_id;
-
-    // Check if we are listening to this transform
-    for (auto& subscribed_transform : transforms_)
-      if (source == subscribed_transform.source_frame && target == subscribed_transform.target_frame)
-        subscribed_transform.is_static = true;
-  }
-}
-
 }  // namespace hector_software_monitor
 
 int main(int argc, char** argv)
