@@ -1,7 +1,6 @@
 #pragma once
 
 #include <boost/accumulators/accumulators.hpp>
-#include <boost/accumulators/statistics/count.hpp>
 #include <boost/accumulators/statistics/max.hpp>
 #include <boost/accumulators/statistics/min.hpp>
 #include <boost/accumulators/statistics/rolling_mean.hpp>
@@ -23,17 +22,20 @@ class TopicFrequencyChecker
 {
 public:
   /**
-   * @brief The TimeFrequency struct keeps track of the number of messages received on a topic and the timestamp of last
+   * @brief The TopicData struct keeps track of the number of messages received on a topic and the timestamp of last
    * evaluation
    */
-  struct TimeFrequency
+  struct TopicData
   {
-    TimeFrequency();
+    TopicData(double min, double max, double timeout);
 
     ros::Time last_evaluation;
     ros::Time last_msg_received;
-    ba::accumulator_set<double, ba::stats<ba::tag::rolling_mean, ba::tag::min, ba::tag::max, ba::tag::count>>
-        intervals_acc;
+    ba::accumulator_set<double, ba::stats<ba::tag::rolling_mean, ba::tag::min, ba::tag::max>> intervals_acc;
+    size_t count;
+    bool new_msgs_received;
+    double min_frequency_required, max_frequency_required;
+    double timeout;
   };
 
   TopicFrequencyChecker();
@@ -50,12 +52,12 @@ private:
   /**
    * @brief frequencyCallback A function that is called periodically to evaluate the frequency of each topic
    */
-  void frequencyCallback(const ros::TimerEvent& event);
+  void timerCallback(const ros::TimerEvent& event);
 
   /**
-   * @brief Contains pairs of topic name and belongig timestamp & frequency
+   * @brief Contains pairs of topic name and belongig data
    */
-  std::map<std::string, TimeFrequency> topics_;
+  std::map<std::string, TopicData> topics_;
   std::vector<ros::Subscriber> topic_subs_;
 
   ros::Time time_prev_;
