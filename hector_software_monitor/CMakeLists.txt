@@ -20,13 +20,11 @@ include_directories(include ${catkin_INCLUDE_DIRS})
 ## Specify additional locations of header files
 set(HEADERS
   include/${PROJECT_NAME}/analyzers/simple_analyzer.h
-  include/${PROJECT_NAME}/analyzers/topic_frequency_analyzer.h
   include/${PROJECT_NAME}/topic_frequency_checker.h
 )
 
 set(SOURCES
   src/analyzers/simple_analyzer.cpp
-  src/analyzers/topic_frequency_analyzer.cpp
 )
 
 ## Declare a cpp library
