@@ -46,7 +46,7 @@ target_link_libraries(active_nodes_checker ${PROJECT_NAME})
 target_link_libraries(topic_frequency_checker ${PROJECT_NAME})
 target_link_libraries(tf_checker ${PROJECT_NAME})
 
-install(TARGETS ${PROJECT_NAME}
+install(TARGETS ${PROJECT_NAME} active_nodes_checker tf_checker topic_frequency_checker
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -56,4 +56,9 @@ install(TARGETS ${PROJECT_NAME}
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
   FILES_MATCHING PATTERN "*.h"
+)
+
+install(FILES
+  analyzer_plugins.xml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
