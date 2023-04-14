@@ -5,14 +5,13 @@
 
 namespace hector_software_monitor
 {
+TopicFrequencyChecker::Connection::Connection()
+  : frequency(0.0), last_msg_received(ros::Time(0.0)), delivered_msgs(0), dropped_msgs(0)
+{
+}
+
 TopicFrequencyChecker::TopicData::TopicData(double min, double max, double timeout)
-  : last_msg_received(ros::Time(0.0))
-  , intervals_acc(ba::tag::rolling_window::window_size = 100)
-  , count(0)
-  , new_msgs_received(false)
-  , min_frequency_required(min)
-  , max_frequency_required(max)
-  , timeout(timeout)
+  : min_frequency_required(min), max_frequency_required(max), timeout(timeout)
 {
 }
 
@@ -68,7 +67,7 @@ TopicFrequencyChecker::TopicFrequencyChecker()
     if (min_freq < 0 || max_freq < 0)
       ROS_WARN("[TopicFrequencyAnalyzer] Frequencies cannot be negative");
 
-    double timeout = 1.0;
+    double timeout = 3.0;
     if (dict.hasMember("timeout"))
     {
       if (dict["timeout"].getType() == XmlRpc::XmlRpcValue::TypeDouble)
@@ -84,11 +83,6 @@ TopicFrequencyChecker::TopicFrequencyChecker()
     TopicData time_frequency(min_freq, max_freq, timeout);
     topics_.insert(std::pair<std::string, TopicData>(topic_name, time_frequency));
     topics_.at(topic_name);
-
-    // Setup subscriber on topic
-    ros::Subscriber sub = nh.subscribe<topic_tools::ShapeShifter>(
-        topic_name, 100, boost::bind(&TopicFrequencyChecker::topicCallback, this, _1, topic_name));
-    topic_subs_.push_back(sub);
   }
 
   // Print loaded params
@@ -99,28 +93,32 @@ TopicFrequencyChecker::TopicFrequencyChecker()
        << ", max: " << topic.second.max_frequency_required << ", timeout: " << topic.second.timeout;
   ROS_INFO_STREAM("[TopicFrequencyChecker] Watching following topic-frequency paires:" + ss.str());
 
-  frequency_pub_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics", 10);
+  diagnostics_pub_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics", 10);
 
-  // Set up a timer that triggers timerCallback() at a fixed rate
-  calc_timer_ = nh.createTimer(ros::Duration(1.0), &TopicFrequencyChecker::timerCallback, this);
+  // Setup subscriber for statistics topic
+  stats_sub_ =
+      nh.subscribe<rosgraph_msgs::TopicStatistics>("/statistics", 10, &TopicFrequencyChecker::statCallback, this);
+  timer_ = nh.createTimer(ros::Duration(1.0), &TopicFrequencyChecker::timerCallback, this);
+  timer_.start();
 }
 
-void TopicFrequencyChecker::topicCallback(const topic_tools::ShapeShifter::ConstPtr& msg, const std::string& topic)
+void TopicFrequencyChecker::statCallback(const rosgraph_msgs::TopicStatisticsConstPtr& msg)
 {
   ros::Time stamp = ros::Time::now();
 
-  topics_.at(topic).count++;
-  topics_.at(topic).new_msgs_received = true;
-
-  if (topics_.at(topic).count < 2)
-  {
-    topics_.at(topic).last_msg_received = stamp;
+  // Skip unwanted statistics
+  auto topic_it = topics_.find(msg->topic);
+  if (topic_it == topics_.end())
     return;
-  }
 
-  ros::Duration interval = stamp - topics_.at(topic).last_msg_received;  // TODO replace stamp with msg->header.stamp
-  topics_.at(topic).intervals_acc(interval.toSec());
-  topics_.at(topic).last_msg_received = stamp;
+  // Insert connection in map
+  auto con_key = std::pair<std::string, std::string>(msg->node_pub, msg->node_sub);
+  if (topic_it->second.connections.find(con_key) == topic_it->second.connections.end())
+    topic_it->second.connections.insert(
+        std::pair<std::pair<std::string, std::string>, Connection>(con_key, Connection()));
+
+  topic_it->second.connections.at(con_key).frequency = 1.0 / msg->period_mean.toSec();
+  topic_it->second.connections.at(con_key).last_msg_received = stamp;
 }
 
 void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
@@ -132,72 +130,63 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
     diagnostic_msgs::DiagnosticStatus diag_status;
     diag_status.name = "topic_frequency::" + topic.first;
 
-    // Get data
-    bool initialized = topic.second.count > 1;
-    if (!initialized)
+    size_t error = 0;
+    size_t stale = 0;
+    double error_frequency;
+
+    for (auto& connection : topic.second.connections)
     {
-      diag_status.message = "No messages received";
-      diag_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
+      auto frequency = connection.second.frequency;
+      if (event.current_expected.toSec() - connection.second.last_msg_received.toSec() > topic.second.timeout)
+      {
+        stale++;
+      }
+      else if (frequency < topic.second.min_frequency_required || frequency > topic.second.max_frequency_required)
+      {
+        error++;
+        error_frequency = frequency;
+      }
+
+      diagnostic_msgs::KeyValue keyval_frequency;
+      keyval_frequency.key = connection.first.first + " ->" + connection.first.second;  // pub/sub
+      keyval_frequency.value = std::to_string(frequency);
+      diag_status.values.push_back(keyval_frequency);
+
       diag_array.status.push_back(diag_status);
-      continue;
     }
 
-    // Compare actual to desired values
-    double avg = 1.0 / ba::rolling_mean(topic.second.intervals_acc);
-    bool level_ok;
-    if (avg < topic.second.min_frequency_required || avg > topic.second.max_frequency_required)
+    if (stale > 0)
     {
-      diag_status.message = "Is: " + std::to_string(avg) +
+      diag_status.message =
+          std::to_string(stale) + "/" + std::to_string(topic.second.connections.size()) + " connections are stale";
+      diag_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
+    }
+    if (error > 0)  // Error has higher priority than stale
+    {
+      diag_status.message = "Is: " + std::to_string(error_frequency) +
                             " Hz, should be: " + std::to_string(topic.second.min_frequency_required) + "-" +
                             std::to_string(topic.second.max_frequency_required) + " Hz";
       diag_status.level = diagnostic_msgs::DiagnosticStatus::ERROR;
     }
-    else
+    if (!stale && !error)
     {
       diag_status.message = "OK";
       diag_status.level = diagnostic_msgs::DiagnosticStatus::OK;
     }
 
-    // Check if stale
-    if (!topic.second.new_msgs_received)
+    // Case no messages at all received on topic
+    if (topic.second.connections.empty())
     {
-      double dt = (event.current_expected - topic.second.last_msg_received).toSec();
-      if (dt > topic.second.timeout)
-      {
-        diag_status.message = "Time since last new message: " + std::to_string(dt) + " s";
-        diag_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
-      }
+      diag_status.message = "No message received yet";
+      diag_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
     }
-
-    // Fill status message with key values
-    diagnostic_msgs::KeyValue keyval_avg;
-    keyval_avg.key = "avg";
-    keyval_avg.value = topic.second.new_msgs_received ?
-                           std::to_string(1.0 / ba::rolling_mean(topic.second.intervals_acc)) :
-                           "no new messages";
-    diag_status.values.push_back(keyval_avg);
-    topic.second.new_msgs_received = false;
-
-    diagnostic_msgs::KeyValue keyval_min;
-    keyval_min.key = "min interval";
-    keyval_min.value = std::to_string(ba::min(topic.second.intervals_acc)) + 's';
-    diag_status.values.push_back(keyval_min);
-
-    diagnostic_msgs::KeyValue keyval_max;
-    keyval_max.key = "max interval";
-    keyval_max.value = std::to_string(ba::max(topic.second.intervals_acc)) + 's';
-    diag_status.values.push_back(keyval_max);
-
-    diagnostic_msgs::KeyValue keyval_count;
-    keyval_count.key = "message count";
-    keyval_count.value = std::to_string(topic.second.count);
-    diag_status.values.push_back(keyval_count);
 
     diag_array.status.push_back(diag_status);
   }
 
-  diag_array.header.stamp = ros::Time::now();
-  frequency_pub_.publish(diag_array);
+  diag_array.header.stamp = event.current_expected;
+
+  diagnostics_pub_.publish(diag_array);
 }
 }  // namespace hector_software_monitor
 

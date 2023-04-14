@@ -1,19 +1,10 @@
 #pragma once
 
-#include <boost/accumulators/accumulators.hpp>
-#include <boost/accumulators/statistics/max.hpp>
-#include <boost/accumulators/statistics/min.hpp>
-#include <boost/accumulators/statistics/rolling_mean.hpp>
-#include <boost/accumulators/statistics/stats.hpp>
-
 #include <ros/ros.h>
-
-#include <topic_tools/shape_shifter.h>
+#include <rosgraph_msgs/TopicStatistics.h>
 
 namespace hector_software_monitor
 {
-namespace ba = boost::accumulators;
-
 /**
  * @brief The TopicFrequencyChecker class publishs a DiagnosticStatus containing the topics corresponding publish rates
  * specified in a config file
@@ -22,19 +13,35 @@ class TopicFrequencyChecker
 {
 public:
   /**
-   * @brief The TopicData struct keeps track of the number of messages received on a topic and the timestamp of last
+   * @brief The Connection class keeps track of the number of messages sent over a connection (publisher/subscriber
+   * pair) and the timestamp of last evaluation
+   */
+  struct Connection
+  {
+    Connection();
+
+    double frequency;
+    ros::Time last_msg_received;
+    size_t delivered_msgs;
+    size_t dropped_msgs;
+  };
+
+  /**
+   * @brief The TopicData struct stores data for each subscriber of a topic
    * evaluation
    */
   struct TopicData
   {
     TopicData(double min, double max, double timeout);
 
-    ros::Time last_evaluation;
-    ros::Time last_msg_received;
-    ba::accumulator_set<double, ba::stats<ba::tag::rolling_mean, ba::tag::min, ba::tag::max>> intervals_acc;
-    size_t count;
-    bool new_msgs_received;
+    /**
+     * @brief data Key: pair of publisher/subscriber. Value: data for this connection
+     */
+    std::map<std::pair<std::string, std::string>, Connection> connections;
     double min_frequency_required, max_frequency_required;
+    /**
+     * @brief timeout If no statistics msg was received after this timeout -> label stale
+     */
     double timeout;
   };
 
@@ -47,23 +54,21 @@ private:
    * @param msg The message
    * @param topic The topic on which the message was received
    */
-  void topicCallback(const topic_tools::ShapeShifter::ConstPtr& msg, const std::string& topic);
+  void statCallback(const rosgraph_msgs::TopicStatisticsConstPtr& msg);
 
   /**
-   * @brief frequencyCallback A function that is called periodically to evaluate the frequency of each topic
+   * @brief timerCallback A method called periodically to evaluate all registered topics for their frequency
+   * @param event
    */
   void timerCallback(const ros::TimerEvent& event);
 
   /**
-   * @brief Contains pairs of topic name and belongig data
+   * @brief Contains topics and belongig data
    */
   std::map<std::string, TopicData> topics_;
-  std::vector<ros::Subscriber> topic_subs_;
 
-  ros::Time time_prev_;
-  ros::Timer calc_timer_;
-
-  ros::Subscriber topic_sub_;
-  ros::Publisher frequency_pub_;
+  ros::Subscriber stats_sub_;
+  ros::Publisher diagnostics_pub_;
+  ros::Timer timer_;
 };
 }  // namespace hector_software_monitor

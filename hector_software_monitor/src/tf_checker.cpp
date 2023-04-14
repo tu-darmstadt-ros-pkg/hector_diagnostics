@@ -66,7 +66,7 @@ TFChecker::TFChecker() : tf_listener_(tf_buffer_)
                 << " | timeout: " << transform.timeout << std::endl;
   ROS_INFO("[TF_Checker] Watching the following tf transforms:\n%s", info_stream.str().c_str());
 
-  // Setup subscriber, publisher and timer
+  // Setup publisher and timer
   diagnostics_pub_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics", 10);
   publish_timer_ = nh.createTimer(ros::Duration(1.0), &TFChecker::timerCallback, this);
 }

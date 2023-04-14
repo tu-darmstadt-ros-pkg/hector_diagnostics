@@ -19,7 +19,6 @@
 
   <depend>roscpp</depend>
   <depend>tf2_ros</depend>
-  <depend>topic_tools</depend>
   <depend>pluginlib</depend>
   <depend>diagnostic_aggregator</depend>
   <depend>diagnostic_msgs</depend>

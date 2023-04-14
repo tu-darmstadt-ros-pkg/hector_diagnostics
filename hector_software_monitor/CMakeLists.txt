@@ -12,7 +12,7 @@ find_package(catkin REQUIRED COMPONENTS roscpp topic_tools tf2_ros diagnostic_ag
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp topic_tools diagnostic_aggregator diagnostic_msgs pluginlib
+  CATKIN_DEPENDS roscpp diagnostic_aggregator diagnostic_msgs pluginlib
 )
 
 include_directories(include ${catkin_INCLUDE_DIRS})
