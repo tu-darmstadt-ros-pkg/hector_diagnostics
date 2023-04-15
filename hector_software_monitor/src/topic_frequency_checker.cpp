@@ -19,6 +19,10 @@ TopicFrequencyChecker::TopicFrequencyChecker()
 {
   ros::NodeHandle nh;
 
+  // Check if statistics are enabled
+  if (!nh.param("/enable_statistics", false))
+    ROS_ERROR("[TopicFrequencyChecker] Parameter \'/enable_statistics\' must be set for this node to work");
+
   // Load topics from parameter server
   XmlRpc::XmlRpcValue topic_frequency_list;
   if (!nh.getParam("topic_frequency_analyzer", topic_frequency_list))
