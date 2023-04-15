@@ -11,7 +11,7 @@ TopicFrequencyChecker::Connection::Connection()
 }
 
 TopicFrequencyChecker::TopicData::TopicData(double min, double max, double timeout)
-  : min_frequency_required(min), max_frequency_required(max), timeout(timeout)
+  : min_frequency_required(min), max_frequency_required(max), timeout(timeout), initialized(false)
 {
 }
 
@@ -119,16 +119,41 @@ void TopicFrequencyChecker::statCallback(const rosgraph_msgs::TopicStatisticsCon
 
   topic_it->second.connections.at(con_key).frequency = 1.0 / msg->period_mean.toSec();
   topic_it->second.connections.at(con_key).last_msg_received = stamp;
+
+  topic_it->second.initialized = true;  // At least one connection has been established
 }
 
 void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
 {
+  // Get list of all active nodes to later remove the connections without active publisher/subscriber
+  std::vector<std::string> active_nodes;
+  ros::master::getNodes(active_nodes);
+
   diagnostic_msgs::DiagnosticArray diag_array;
 
   for (auto& topic : topics_)
   {
     diagnostic_msgs::DiagnosticStatus diag_status;
     diag_status.name = "topic_frequency::" + topic.first;
+
+    // Erase all connections without active publisher and subscriber
+    for (auto it = topic.second.connections.cbegin(); it != topic.second.connections.cend();)
+    {
+      // Check pubsliher
+      bool connection_active =
+          std::find(active_nodes.begin(), active_nodes.end(), it->first.first) != active_nodes.end();
+      // Check subscriber
+      connection_active &= std::find(active_nodes.begin(), active_nodes.end(), it->first.second) != active_nodes.end();
+
+      if (!connection_active)
+      {
+        topic.second.connections.erase(it++);
+      }
+      else
+      {
+        ++it;
+      }
+    }
 
     size_t error = 0;
     size_t stale = 0;
@@ -174,10 +199,11 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
       diag_status.level = diagnostic_msgs::DiagnosticStatus::OK;
     }
 
-    // Case no messages at all received on topic
+    // If there are no connections for this topic
     if (topic.second.connections.empty())
     {
-      diag_status.message = "No message received yet";
+      diag_status.message =
+          topic.second.initialized ? "All publishers or subscribers shut down" : "No message received yet";
       diag_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
     }
 

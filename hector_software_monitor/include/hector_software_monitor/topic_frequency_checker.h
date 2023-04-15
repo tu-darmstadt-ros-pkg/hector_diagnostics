@@ -43,6 +43,7 @@ public:
      * @brief timeout If no statistics msg was received after this timeout -> label stale
      */
     double timeout;
+    bool initialized;
   };
 
   TopicFrequencyChecker();
