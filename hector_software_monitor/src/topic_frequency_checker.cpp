@@ -22,25 +22,25 @@ TopicFrequencyChecker::TopicFrequencyChecker()
   // Load topics from parameter server
   XmlRpc::XmlRpcValue topic_frequency_list;
   if (!nh.getParam("topic_frequency_analyzer", topic_frequency_list))
-    ROS_ERROR("[TopicFrequencyAnalyzer] Could not get \"topic_frequency_analyzer\" from param server");
+    ROS_ERROR("[TopicFrequencyChecker] Could not get \"topic_frequency_analyzer\" from param server");
 
   if (topic_frequency_list.getType() != XmlRpc::XmlRpcValue::TypeArray)
-    ROS_ERROR("[TopicFrequencyAnalyzer] Parameter topic_frequency_analyzer must be a list of dicts");
+    ROS_ERROR("[TopicFrequencyChecker] Parameter topic_frequency_analyzer must be a list of dicts");
 
   for (std::size_t i = 0; i < topic_frequency_list.size(); i++)
   {
     const XmlRpc::XmlRpcValue& dict = topic_frequency_list[i];
 
     if (dict.getType() != XmlRpc::XmlRpcValue::TypeStruct)
-      ROS_ERROR("[TopicFrequencyAnalyzer] Parameter topic_frequency_analyzer must be a list of dicts");
+      ROS_ERROR("[TopicFrequencyChecker] Parameter topic_frequency_analyzer must be a list of dicts");
 
     // check for required nodes
     if (!(dict.hasMember("topic") && dict.hasMember("min_hz") && dict.hasMember("max_hz")))
-      ROS_ERROR("[TopicFrequencyAnalyzer] Either topic_name, min_hz or max_hz was not specified");
+      ROS_ERROR("[TopicFrequencyChecker] Either topic_name, min_hz or max_hz was not specified");
 
     // get topic
     if (!(dict["topic"].getType() == XmlRpc::XmlRpcValue::TypeString))
-      ROS_ERROR("[TopicFrequencyAnalyzer] topic name was not specified");
+      ROS_ERROR("[TopicFrequencyChecker] topic name was not specified");
     std::string topic_name = static_cast<std::string>(dict["topic"]);
     if (topic_name[0] != '/')
       topic_name = '/' + topic_name;
@@ -52,20 +52,20 @@ TopicFrequencyChecker::TopicFrequencyChecker()
     else if (dict["min_hz"].getType() == XmlRpc::XmlRpcValue::TypeInt)
       min_freq = static_cast<double>(static_cast<int>(dict["min_hz"]));
     else
-      ROS_ERROR("[TopicFrequencyAnalyzer] min_hz must be of type int or double");
+      ROS_ERROR("[TopicFrequencyChecker] min_hz must be of type int or double");
     double max_freq;
     if (dict["max_hz"].getType() == XmlRpc::XmlRpcValue::TypeDouble)
       max_freq = static_cast<double>(dict["max_hz"]);
     else if (dict["max_hz"].getType() == XmlRpc::XmlRpcValue::TypeInt)
       max_freq = static_cast<double>(static_cast<int>(dict["max_hz"]));
     else
-      ROS_ERROR("[TopicFrequencyAnalyzer] max_hz must be of type int or double");
+      ROS_ERROR("[TopicFrequencyChecker] max_hz must be of type int or double");
 
     // Sanity checks
     if (min_freq > max_freq)
-      ROS_WARN("[TopicFrequencyAnalyzer] max_hz cannot be less than min_hz");
+      ROS_WARN("[TopicFrequencyChecker] max_hz cannot be less than min_hz");
     if (min_freq < 0 || max_freq < 0)
-      ROS_WARN("[TopicFrequencyAnalyzer] Frequencies cannot be negative");
+      ROS_WARN("[TopicFrequencyChecker] Frequencies cannot be negative");
 
     double timeout = 3.0;
     if (dict.hasMember("timeout"))
@@ -75,7 +75,7 @@ TopicFrequencyChecker::TopicFrequencyChecker()
       else if (dict["timeout"].getType() == XmlRpc::XmlRpcValue::TypeInt)
         timeout = static_cast<int>(dict["timeout"]);
       else
-        ROS_WARN("[TopicFrequencyAnalyzer] %s: timeout must be of type int or double. Using default value 1 s",
+        ROS_WARN("[TopicFrequencyChecker] %s: timeout must be of type int or double. Using default value 1 s",
                  topic_name.c_str());
     }
 
