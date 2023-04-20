@@ -22,6 +22,7 @@ public:
 
     double frequency;
     ros::Time last_msg_received;
+    ros::Duration last_update_interval;  // Time between the last two updates on /statistics
     size_t delivered_msgs;
     size_t dropped_msgs;
   };

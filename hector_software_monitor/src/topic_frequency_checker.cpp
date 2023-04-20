@@ -6,7 +6,11 @@
 namespace hector_software_monitor
 {
 TopicFrequencyChecker::Connection::Connection()
-  : frequency(0.0), last_msg_received(ros::Time(0.0)), delivered_msgs(0), dropped_msgs(0)
+  : frequency(0.0)
+  , last_msg_received(ros::Time(0.0))
+  , last_update_interval(ros::Duration(0.0))
+  , delivered_msgs(0)
+  , dropped_msgs(0)
 {
 }
 
@@ -117,12 +121,11 @@ void TopicFrequencyChecker::statCallback(const rosgraph_msgs::TopicStatisticsCon
 
   // Insert connection in map
   auto con_key = std::pair<std::string, std::string>(msg->node_pub, msg->node_sub);
-  if (topic_it->second.connections.find(con_key) == topic_it->second.connections.end())
-    topic_it->second.connections.insert(
-        std::pair<std::pair<std::string, std::string>, Connection>(con_key, Connection()));
 
-  topic_it->second.connections.at(con_key).frequency = 1.0 / msg->period_mean.toSec();
-  topic_it->second.connections.at(con_key).last_msg_received = stamp;
+  topic_it->second.connections[con_key].frequency = 1.0 / msg->period_mean.toSec();
+  topic_it->second.connections[con_key].last_update_interval =
+      stamp - topic_it->second.connections[con_key].last_msg_received;
+  topic_it->second.connections[con_key].last_msg_received = stamp;
 
   topic_it->second.initialized = true;  // At least one connection has been established
 }
@@ -151,6 +154,8 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
 
       if (!connection_active)
       {
+        ROS_INFO("[TopicFrequencyChecker] Removing connection \"%s -> %s\" for topic \"%s\"", it->first.first.c_str(),
+                 it->first.second.c_str(), topic.first.c_str());
         topic.second.connections.erase(it++);
       }
       else
@@ -161,53 +166,85 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
 
     size_t error = 0;
     size_t stale = 0;
-    double error_frequency;
+    double error_frequency = 0;  // stores the frequency of erroneous topic with maximum deviation from desired values
+    double max_deviation = 0;
+    double avg_update_interval = 0;
 
     for (auto& connection : topic.second.connections)
     {
+      avg_update_interval += connection.second.last_update_interval.toSec();
+
       auto frequency = connection.second.frequency;
       if (event.current_expected.toSec() - connection.second.last_msg_received.toSec() > topic.second.timeout)
       {
         stale++;
       }
-      else if (frequency < topic.second.min_frequency_required || frequency > topic.second.max_frequency_required)
+      else if (frequency < topic.second.min_frequency_required)
       {
         error++;
-        error_frequency = frequency;
+        double deviation = topic.second.min_frequency_required - frequency;
+        if (deviation > max_deviation)
+        {
+          error_frequency = frequency;
+          max_deviation = deviation;
+        }
+      }
+      else if (frequency > topic.second.max_frequency_required)
+      {
+        error++;
+        double deviation = frequency - topic.second.max_frequency_required;
+        if (deviation > max_deviation)
+        {
+          error_frequency = frequency;
+          max_deviation = deviation;
+        }
       }
 
-      diagnostic_msgs::KeyValue keyval_frequency;
-      keyval_frequency.key = connection.first.first + " ->" + connection.first.second;  // pub/sub
-      keyval_frequency.value = std::to_string(frequency);
-      diag_status.values.push_back(keyval_frequency);
-
-      diag_array.status.push_back(diag_status);
+      diagnostic_msgs::KeyValue kv;
+      kv.key = connection.first.first + " ->" + connection.first.second;  // pub/sub
+      kv.value = std::to_string(frequency);
+      diag_status.values.push_back(kv);
     }
 
-    if (stale > 0)
+    if (!topic.second.connections.empty())
+    {
+      avg_update_interval /= topic.second.connections.size();
+      diagnostic_msgs::KeyValue kv;
+      kv.key = "Statistics update interval";
+      kv.value = std::to_string(avg_update_interval);
+      diag_status.values.push_back(kv);
+    }
+
+    // Topic Status: OK if at least one connection is OK
+    bool all_stale = stale == topic.second.connections.size();
+    bool all_error = error == topic.second.connections.size();
+    if (all_stale)
     {
       diag_status.message =
           std::to_string(stale) + "/" + std::to_string(topic.second.connections.size()) + " connections are stale";
       diag_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
     }
-    if (error > 0)  // Error has higher priority than stale
+    else if (all_error)
     {
       diag_status.message = "Is: " + std::to_string(error_frequency) +
                             " Hz, should be: " + std::to_string(topic.second.min_frequency_required) + "-" +
                             std::to_string(topic.second.max_frequency_required) + " Hz";
       diag_status.level = diagnostic_msgs::DiagnosticStatus::ERROR;
     }
-    if (!stale && !error)
+    else
     {
-      diag_status.message = "OK";
+      if (stale || error)
+        diag_status.message = "Error: " + std::to_string(error) + " | Stale: " + std::to_string(stale) +
+                              " | OK:" + std::to_string(topic.second.connections.size() - error - stale);
+      else
+        diag_status.message = "OK";
       diag_status.level = diagnostic_msgs::DiagnosticStatus::OK;
     }
 
     // If there are no connections for this topic
     if (topic.second.connections.empty())
     {
-      diag_status.message =
-          topic.second.initialized ? "All publishers or subscribers shut down" : "No message received yet";
+      diag_status.message = topic.second.initialized ? "No active connection" : "No message received yet";
       diag_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
     }
 
