@@ -143,7 +143,7 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
     diagnostic_msgs::DiagnosticStatus diag_status;
     diag_status.name = "topic_frequency::" + topic.first;
 
-    // Erase all connections without active publisher and subscriber
+    // Erase all connections without active publisher and subscriber + stale connections
     for (auto it = topic.second.connections.cbegin(); it != topic.second.connections.cend();)
     {
       // Check pubsliher
@@ -152,7 +152,9 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
       // Check subscriber
       connection_active &= std::find(active_nodes.begin(), active_nodes.end(), it->first.second) != active_nodes.end();
 
-      if (!connection_active)
+      bool stale = event.current_expected.toSec() - it->second.last_msg_received.toSec() > topic.second.timeout;
+
+      if (!connection_active || stale)
       {
         ROS_INFO("[TopicFrequencyChecker] Removing connection \"%s -> %s\" for topic \"%s\"", it->first.first.c_str(),
                  it->first.second.c_str(), topic.first.c_str());
@@ -164,8 +166,7 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
       }
     }
 
-    size_t error = 0;
-    size_t stale = 0;
+    size_t errors = 0;
     double error_frequency = 0;  // stores the frequency of erroneous topic with maximum deviation from desired values
     double max_deviation = 0;
     double avg_update_interval = 0;
@@ -175,13 +176,10 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
       avg_update_interval += connection.second.last_update_interval.toSec();
 
       auto frequency = connection.second.frequency;
-      if (event.current_expected.toSec() - connection.second.last_msg_received.toSec() > topic.second.timeout)
+
+      if (frequency < topic.second.min_frequency_required)
       {
-        stale++;
-      }
-      else if (frequency < topic.second.min_frequency_required)
-      {
-        error++;
+        errors++;
         double deviation = topic.second.min_frequency_required - frequency;
         if (deviation > max_deviation)
         {
@@ -191,7 +189,7 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
       }
       else if (frequency > topic.second.max_frequency_required)
       {
-        error++;
+        errors++;
         double deviation = frequency - topic.second.max_frequency_required;
         if (deviation > max_deviation)
         {
@@ -216,15 +214,8 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
     }
 
     // Topic Status: OK if at least one connection is OK
-    bool all_stale = stale == topic.second.connections.size();
-    bool all_error = error == topic.second.connections.size();
-    if (all_stale)
-    {
-      diag_status.message =
-          std::to_string(stale) + "/" + std::to_string(topic.second.connections.size()) + " connections are stale";
-      diag_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
-    }
-    else if (all_error)
+    bool all_error = errors == topic.second.connections.size();
+    if (all_error)
     {
       diag_status.message = "Is: " + std::to_string(error_frequency) +
                             " Hz, should be: " + std::to_string(topic.second.min_frequency_required) + "-" +
@@ -233,19 +224,19 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
     }
     else
     {
-      if (stale || error)
-        diag_status.message = "Error: " + std::to_string(error) + " | Stale: " + std::to_string(stale) +
-                              " | OK:" + std::to_string(topic.second.connections.size() - error - stale);
+      diag_status.level = diagnostic_msgs::DiagnosticStatus::OK;
+      if (errors)
+        diag_status.message =
+            "Error: " + std::to_string(errors) + " | OK:" + std::to_string(topic.second.connections.size() - errors);
       else
         diag_status.message = "OK";
-      diag_status.level = diagnostic_msgs::DiagnosticStatus::OK;
     }
 
     // If there are no connections for this topic
     if (topic.second.connections.empty())
     {
       diag_status.message = topic.second.initialized ? "No active connection" : "No message received yet";
-      diag_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
+      diag_status.level = diagnostic_msgs::DiagnosticStatus::OK;
     }
 
     diag_array.status.push_back(diag_status);
