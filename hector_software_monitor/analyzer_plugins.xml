@@ -1,0 +1,9 @@
+<library path="lib/libhector_software_monitor" >
+  <class name="hector_software_monitor/SimpleAnalyzer"
+           type="hector_software_monitor::SimpleAnalyzer"
+           base_class_type="diagnostic_aggregator::Analyzer">
+      <description>
+        A simple example for the usage of analyzers.
+      </description>
+    </class>
+</library>
