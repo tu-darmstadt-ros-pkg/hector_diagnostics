@@ -200,7 +200,7 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
 
       diagnostic_msgs::KeyValue kv;
       kv.key = connection.first.first + " ->" + connection.first.second;  // pub/sub
-      kv.value = std::to_string(frequency);
+      kv.value = std::to_string(frequency) + " Hz";
       diag_status.values.push_back(kv);
     }
 
@@ -209,7 +209,7 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
       avg_update_interval /= topic.second.connections.size();
       diagnostic_msgs::KeyValue kv;
       kv.key = "Statistics update interval";
-      kv.value = std::to_string(avg_update_interval);
+      kv.value = std::to_string(avg_update_interval) + " s";
       diag_status.values.push_back(kv);
     }
 
