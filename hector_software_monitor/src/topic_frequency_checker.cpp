@@ -239,6 +239,11 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
       diag_status.level = diagnostic_msgs::DiagnosticStatus::OK;
     }
 
+    diagnostic_msgs::KeyValue kv;
+    kv.key = "topic";
+    kv.value = topic.first;
+    diag_status.values.push_back(kv);
+
     diag_array.status.push_back(diag_status);
   }
 
