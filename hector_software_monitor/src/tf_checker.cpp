@@ -124,6 +124,23 @@ void TFChecker::timerCallback(const ros::TimerEvent& event)
     if (is_static)
       diag_status.message += " (static)";
 
+    diagnostic_msgs::KeyValue kv;
+    kv.key = "source frame";
+    kv.value = transform.source_frame;
+    diag_status.values.push_back(kv);
+    kv.key = "target frame";
+    kv.value = transform.target_frame;
+    diag_status.values.push_back(kv);
+    if (transform_found)
+    {
+      kv.key = "static";
+      kv.value = is_static ? "true" : "false";
+      diag_status.values.push_back(kv);
+      kv.key = "last msg";
+      kv.value = std::to_string(int(dt.toSec())) + " seconds ago";
+      diag_status.values.push_back(kv);
+    }
+
     diag_array.status.push_back(diag_status);
   }
 
