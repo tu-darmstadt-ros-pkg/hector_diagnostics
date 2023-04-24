@@ -34,6 +34,9 @@ int main(int argc, char** argv)
       ROS_ERROR("[ActiveNodesChecker] Could not retrieve active nodes with ros::master::getNodes");
     }
 
+    diagnostic_msgs::DiagnosticArray diagnostic_array;
+    diagnostic_array.header.stamp = ros::Time::now();
+
     for (std::string node_name : nodes_to_be_checked)
     {
       diagnostic_msgs::DiagnosticStatus diagnostic_status;
@@ -55,12 +58,17 @@ int main(int argc, char** argv)
         diagnostic_status.level = diagnostic_msgs::DiagnosticStatus::ERROR;
         diagnostic_status.message = "Not active";
       }
-      diagnostic_msgs::DiagnosticArray diagnostic_array;
-      diagnostic_array.header.stamp = ros::Time::now();
-      diagnostic_array.status.push_back(diagnostic_status);
 
-      diagnostics_publisher.publish(diagnostic_array);
+      diagnostic_msgs::KeyValue kv;
+      kv.key = "node";
+      kv.value = node_name;
+      diagnostic_status.values.push_back(kv);
+
+      diagnostic_array.status.push_back(diagnostic_status);
     }
+
+    diagnostics_publisher.publish(diagnostic_array);
+
     ros::spinOnce();
     ros::Duration(1).sleep();
   }
