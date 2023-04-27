@@ -15,7 +15,11 @@ TopicFrequencyChecker::Connection::Connection()
 }
 
 TopicFrequencyChecker::TopicData::TopicData(double min, double max, double timeout)
-  : min_frequency_required(min), max_frequency_required(max), timeout(timeout), initialized(false)
+  : min_frequency_required(min)
+  , max_frequency_required(max)
+  , timeout(timeout)
+  , initialized(false)
+  , last_msg_received(ros::Time(0))
 {
 }
 
@@ -90,7 +94,13 @@ TopicFrequencyChecker::TopicFrequencyChecker()
     // Store TimeFrequency object
     TopicData time_frequency(min_freq, max_freq, timeout);
     topics_.insert(std::pair<std::string, TopicData>(topic_name, time_frequency));
-    topics_.at(topic_name);
+
+    if (max_freq == 0)
+    {
+      ros::Subscriber sub = nh.subscribe<topic_tools::ShapeShifter>(
+          topic_name, 10, boost::bind(&TopicFrequencyChecker::inverseCallback, this, _1, topic_name));
+      inverse_subs_.push_back(sub);
+    }
   }
 
   // Print loaded params
@@ -146,13 +156,16 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
     // Erase all connections without active publisher and subscriber + stale connections
     for (auto it = topic.second.connections.cbegin(); it != topic.second.connections.cend();)
     {
-      // Check pubsliher
+      // Check publisher
       bool connection_active =
           std::find(active_nodes.begin(), active_nodes.end(), it->first.first) != active_nodes.end();
       // Check subscriber
       connection_active &= std::find(active_nodes.begin(), active_nodes.end(), it->first.second) != active_nodes.end();
 
       bool stale = event.current_expected.toSec() - it->second.last_msg_received.toSec() > topic.second.timeout;
+      // Inverted topics never go stale
+      if (topic.second.max_frequency_required == 0)
+        stale = false;
 
       if (!connection_active || stale)
       {
@@ -239,6 +252,16 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
       diag_status.level = diagnostic_msgs::DiagnosticStatus::OK;
     }
 
+    // Inverted topics are reset to 'OK' after timeout
+    if (topic.second.max_frequency_required == 0)
+    {
+      if ((event.current_expected - topic.second.last_msg_received).toSec() > topic.second.timeout)
+      {
+        diag_status.message = "Timeout (" + std::to_string(topic.second.connections.size()) + " Connections)";
+        diag_status.level = diagnostic_msgs::DiagnosticStatus::OK;
+      }
+    }
+
     diagnostic_msgs::KeyValue kv;
     kv.key = "topic";
     kv.value = topic.first;
@@ -250,6 +273,11 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
   diag_array.header.stamp = event.current_expected;
 
   diagnostics_pub_.publish(diag_array);
+}
+
+void TopicFrequencyChecker::inverseCallback(const topic_tools::ShapeShifter::ConstPtr& input, const std::string& topic)
+{
+  topics_.at(topic).last_msg_received = ros::Time::now();
 }
 }  // namespace hector_software_monitor
 

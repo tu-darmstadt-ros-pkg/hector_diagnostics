@@ -2,6 +2,7 @@
 
 #include <ros/ros.h>
 #include <rosgraph_msgs/TopicStatistics.h>
+#include <topic_tools/shape_shifter.h>
 
 namespace hector_software_monitor
 {
@@ -45,6 +46,7 @@ public:
      */
     double timeout;
     bool initialized;
+    ros::Time last_msg_received;  // only used for topics with max desired freq == 0
   };
 
   TopicFrequencyChecker();
@@ -65,11 +67,17 @@ private:
   void timerCallback(const ros::TimerEvent& event);
 
   /**
+   * @brief inverseCallback callback for topics that should not be used at all
+   */
+  void inverseCallback(const topic_tools::ShapeShifter::ConstPtr& input, const std::string& topic);
+
+  /**
    * @brief Contains topics and belongig data
    */
   std::map<std::string, TopicData> topics_;
 
   ros::Subscriber stats_sub_;
+  std::vector<ros::Subscriber> inverse_subs_;  // Subscribers for topics that should not receive anything at all
   ros::Publisher diagnostics_pub_;
   ros::Timer timer_;
 };
