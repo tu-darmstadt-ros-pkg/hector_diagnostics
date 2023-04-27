@@ -212,8 +212,10 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
       }
 
       diagnostic_msgs::KeyValue kv;
-      kv.key = connection.first.first + " ->" + connection.first.second;  // pub/sub
-      kv.value = std::to_string(frequency) + " Hz";
+      kv.key = connection.first.first + " -> " + connection.first.second;  // pub/sub
+      std::stringstream ss;
+      ss << std::fixed << std::setprecision(2) << frequency << " Hz";
+      kv.value = ss.str();
       diag_status.values.push_back(kv);
     }
 
@@ -230,9 +232,11 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
     bool all_error = errors == topic.second.connections.size();
     if (all_error)
     {
-      diag_status.message = "Is: " + std::to_string(error_frequency) +
-                            " Hz, should be: " + std::to_string(topic.second.min_frequency_required) + "-" +
-                            std::to_string(topic.second.max_frequency_required) + " Hz";
+      std::stringstream ss;
+      ss << std::fixed << std::setprecision(2) << "Is: " << error_frequency
+         << " Hz, should be: " << topic.second.min_frequency_required << +"-" << topic.second.max_frequency_required
+         << " Hz";
+      diag_status.message = ss.str();
       diag_status.level = diagnostic_msgs::DiagnosticStatus::ERROR;
     }
     else
