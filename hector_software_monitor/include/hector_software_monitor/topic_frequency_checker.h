@@ -34,7 +34,7 @@ public:
    */
   struct TopicData
   {
-    TopicData(double min, double max, double timeout);
+    TopicData(double min, double max, double timeout, bool is_lazy);
 
     /**
      * @brief data Key: pair of publisher/subscriber. Value: data for this connection
@@ -46,6 +46,7 @@ public:
      */
     double timeout;
     bool initialized;
+    bool is_lazy;
     ros::Time last_msg_received;  // only used for topics with max desired freq == 0
   };
 

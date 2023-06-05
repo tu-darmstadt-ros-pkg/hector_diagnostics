@@ -14,11 +14,12 @@ TopicFrequencyChecker::Connection::Connection()
 {
 }
 
-TopicFrequencyChecker::TopicData::TopicData(double min, double max, double timeout)
+TopicFrequencyChecker::TopicData::TopicData(double min, double max, double timeout, bool is_lazy)
   : min_frequency_required(min)
   , max_frequency_required(max)
   , timeout(timeout)
   , initialized(false)
+  , is_lazy(is_lazy)
   , last_msg_received(ros::Time(0))
 {
 }
@@ -91,8 +92,20 @@ TopicFrequencyChecker::TopicFrequencyChecker()
                  topic_name.c_str());
     }
 
+    bool lazy = false;
+    if (dict.hasMember("lazy"))
+    {
+      if (dict["lazy"].getType() == XmlRpc::XmlRpcValue::TypeBoolean)
+      {
+        lazy = static_cast<bool>(dict["lazy"]);
+      }
+      else
+        ROS_WARN("[TopicFrequencyChecker] %s: is_lazy must be of type int or double. Using default value false",
+                 topic_name.c_str());
+    }
+
     // Store TimeFrequency object
-    TopicData time_frequency(min_freq, max_freq, timeout);
+    TopicData time_frequency(min_freq, max_freq, timeout, lazy);
     topics_.insert(std::pair<std::string, TopicData>(topic_name, time_frequency));
 
     if (max_freq == 0)
@@ -108,7 +121,8 @@ TopicFrequencyChecker::TopicFrequencyChecker()
   for (auto const& topic : topics_)
     ss << std::endl
        << "> " << topic.first << " | min: " << topic.second.min_frequency_required
-       << ", max: " << topic.second.max_frequency_required << ", timeout: " << topic.second.timeout;
+       << ", max: " << topic.second.max_frequency_required << ", timeout: " << topic.second.timeout
+       << ", lazy: " << topic.second.is_lazy;
   ROS_INFO_STREAM("[TopicFrequencyChecker] Watching following topic-frequency paires:" + ss.str());
 
   diagnostics_pub_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics", 10);
@@ -253,7 +267,8 @@ void TopicFrequencyChecker::timerCallback(const ros::TimerEvent& event)
     if (topic.second.connections.empty())
     {
       diag_status.message = topic.second.initialized ? "No active connection" : "No message received yet";
-      diag_status.level = diagnostic_msgs::DiagnosticStatus::OK;
+      diag_status.level =
+          topic.second.is_lazy ? diagnostic_msgs::DiagnosticStatus::OK : diagnostic_msgs::DiagnosticStatus::ERROR;
     }
 
     // Inverted topics are reset to 'OK' after timeout
