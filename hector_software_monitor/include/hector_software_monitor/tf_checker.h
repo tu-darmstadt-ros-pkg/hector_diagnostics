@@ -1,54 +1,64 @@
 #pragma once
 
-#include <ros/ros.h>
-
+#include <rclcpp/rclcpp.hpp>
+#include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <diagnostic_msgs/msg/diagnostic_array.hpp>
+#include <diagnostic_msgs/msg/diagnostic_status.hpp>
+#include <diagnostic_msgs/msg/key_value.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 
-#include <diagnostic_msgs/DiagnosticStatus.h>
-#include <diagnostic_msgs/DiagnosticArray.h>
+#include <vector>
+#include <string>
+#include <memory> // For std::unique_ptr
 
 namespace hector_software_monitor
 {
+
 /**
- * @brief TODO
+ * @brief Checks the availability and timeliness of specified TF transforms and publishes diagnostics.
  */
-class TFChecker
+class TFChecker : public rclcpp::Node // Inherit from rclcpp::Node
 {
 public:
   /**
-   * @brief The RequiredTransform class stores information about the transform that should be checked
+   * @brief Stores information about a required transform.
    */
   struct RequiredTransform
   {
-    RequiredTransform(std::string source_frame, std::string target_frame, double timeout);
+    RequiredTransform(std::string source_frame, std::string target_frame, double timeout_sec);
     ~RequiredTransform() = default;
 
     std::string source_frame;
     std::string target_frame;
-
-    /**
-     * @brief timeout After this duration without receiving a new message, the transform is marked as stale
-     */
-    ros::Duration timeout;
+    rclcpp::Duration timeout; // Use rclcpp::Duration
   };
 
-  TFChecker();
-  ~TFChecker() = default;
+  /**
+   * @brief Constructor for the TFChecker node.
+   */
+  TFChecker(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
+  ~TFChecker() override = default; // Use override
 
 private:
   /**
- ´  * @brief timerCallback A function that is called periodically to analyze all given transforms and publish their
-   * availability as diagnostic_msgs
+   * @brief Called periodically to check transforms and publish diagnostics.
    */
-  void timerCallback(const ros::TimerEvent& event);
+  void timerCallback(); // No event argument needed
+
+  // Parameter handling
+  void declareParameters();
+  void loadParameters();
 
   std::vector<RequiredTransform> transforms_;
 
-  tf2_ros::Buffer tf_buffer_;
-  tf2_ros::TransformListener tf_listener_;
+  // TF2 members
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_; // Use shared_ptr
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_; // Use shared_ptr
 
-  ros::Timer publish_timer_;
-  ros::Publisher diagnostics_pub_;
+  // ROS 2 members
+  rclcpp::TimerBase::SharedPtr publish_timer_;
+  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_pub_;
 };
 
-}  // namespace hector_software_monitor
+} // namespace hector_software_monitor

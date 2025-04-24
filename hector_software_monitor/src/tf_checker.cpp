@@ -1,130 +1,154 @@
 #include <hector_software_monitor/tf_checker.h>
+#include <tf2/exceptions.h>
+#include <rcl_interfaces/msg/parameter_descriptor.hpp>
+#include <rclcpp/parameter_map.hpp>
+
+#include <chrono> // For chrono literals
+#include <sstream>
+#include <vector>
+#include <string>
+
+using namespace std::chrono_literals;
+using std::placeholders::_1;
 
 namespace hector_software_monitor
 {
-TFChecker::RequiredTransform::RequiredTransform(std::string source_frame, std::string target_frame, double timeout)
-  : source_frame(source_frame), target_frame(target_frame), timeout(timeout)
+
+TFChecker::RequiredTransform::RequiredTransform(std::string source_frame, std::string target_frame, double timeout_sec)
+  : source_frame(std::move(source_frame)), target_frame(std::move(target_frame)), timeout(rclcpp::Duration::from_seconds(timeout_sec))
 {
 }
 
-TFChecker::TFChecker() : tf_listener_(tf_buffer_)
+TFChecker::TFChecker(const rclcpp::NodeOptions & options)
+  : rclcpp::Node("tf_checker", options) // Pass node name and options to base class
 {
-  ros::NodeHandle nh;
+  // Initialize TF2 Buffer and Listener
+  tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-  // Load topics from parameter server
-  XmlRpc::XmlRpcValue transform_list;
-  if (!nh.getParam("tf_transforms", transform_list))
-  {
-    ROS_ERROR("[TFChecker] Could not get \"tf_transforms\" from param server");
-  }
-  if (transform_list.getType() != XmlRpc::XmlRpcValue::TypeArray)
-  {
-    ROS_ERROR("[TFChecker] Parameter tf_transforms must be a list of dicts");
-  }
-
-  // Iterate over all given transforms
-  for (std::size_t i = 0; i < transform_list.size(); i++)
-  {
-    const XmlRpc::XmlRpcValue& dict = transform_list[i];
-
-    if (dict.getType() != XmlRpc::XmlRpcValue::TypeStruct)
-    {
-      ROS_ERROR("[TFChecker] Parameter \'tf_transforms\' must be a list of dicts");
-    }
-
-    if (!(dict.hasMember("source_frame") && dict["source_frame"].getType() == XmlRpc::XmlRpcValue::TypeString &&
-          dict.hasMember("target_frame") && dict["target_frame"].getType() == XmlRpc::XmlRpcValue::TypeString))
-    {
-      ROS_ERROR("[TFChecker] Parameter tf_transforms required fields \'source_frame\', \'target_frame\' of type "
-                "string");
-    }
-
-    if (dict.hasMember("timeout") && !(dict["timeout"].getType() == XmlRpc::XmlRpcValue::TypeInt &&
-                                       dict["timeout"].getType() != XmlRpc::XmlRpcValue::TypeDouble))
-    {
-      ROS_ERROR("[TFChecker] Parameter tf_transforms required field \'timeout\' of type int or double");
-    }
-
-    // Save transform in vector
-    std::string source_frame = static_cast<std::string>(dict["source_frame"]);
-    std::string target_frame = static_cast<std::string>(dict["target_frame"]);
-    double timeout = 1.0;
-    if (dict.hasMember("timeout"))
-    {
-      if (dict["timeout"].getType() == XmlRpc::XmlRpcValue::TypeInt)
-        timeout = static_cast<int>(dict["timeout"]);
-      else if (dict["timeout"].getType() == XmlRpc::XmlRpcValue::TypeDouble)
-        timeout = static_cast<double>(dict["timeout"]);
-    }
-
-    transforms_.push_back(RequiredTransform(source_frame, target_frame, timeout));
-  }
-
-  std::stringstream info_stream;
-  for (const auto& transform : transforms_)
-    info_stream << "> " << transform.source_frame << " -> " << transform.target_frame
-                << " | timeout: " << transform.timeout << std::endl;
-  ROS_INFO("[TF_Checker] Watching the following tf transforms:\n%s", info_stream.str().c_str());
+  // Declare and load parameters
+  declareParameters();
+  loadParameters();
 
   // Setup publisher and timer
-  diagnostics_pub_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics", 10);
-  publish_timer_ = nh.createTimer(ros::Duration(1.0), &TFChecker::timerCallback, this);
+  diagnostics_pub_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10);
+  publish_timer_ = this->create_wall_timer(1s, std::bind(&TFChecker::timerCallback, this));
+
+  RCLCPP_INFO(this->get_logger(), "TFChecker node initialized.");
 }
 
-void TFChecker::timerCallback(const ros::TimerEvent& event)
+void TFChecker::declareParameters()
 {
-  diagnostic_msgs::DiagnosticArray diag_array;
+  rcl_interfaces::msg::ParameterDescriptor source_desc;
+  source_desc.description = "List of source frames for TF checks.";
+  this->declare_parameter<std::vector<std::string>>("tf_source_frames", std::vector<std::string>{}, source_desc);
+
+  rcl_interfaces::msg::ParameterDescriptor target_desc;
+  target_desc.description = "List of target frames corresponding to tf_source_frames.";
+  this->declare_parameter<std::vector<std::string>>("tf_target_frames", std::vector<std::string>{}, target_desc);
+
+  rcl_interfaces::msg::ParameterDescriptor timeout_desc;
+  timeout_desc.description = "List of timeouts (seconds) corresponding to tf_source_frames/tf_target_frames.";
+  this->declare_parameter<std::vector<double>>("tf_timeouts", std::vector<double>{}, timeout_desc);
+}
+
+void TFChecker::loadParameters()
+{
+  std::vector<std::string> source_frames = this->get_parameter("tf_source_frames").as_string_array();
+  std::vector<std::string> target_frames = this->get_parameter("tf_target_frames").as_string_array();
+  std::vector<double> timeouts = this->get_parameter("tf_timeouts").as_double_array();
+
+  if (source_frames.size() != target_frames.size() || source_frames.size() != timeouts.size()) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "Parameter array sizes mismatch! 'tf_source_frames' (%zu), 'tf_target_frames' (%zu), 'tf_timeouts' (%zu) must have the same number of elements.",
+                 source_frames.size(), target_frames.size(), timeouts.size());
+    return; // Or throw?
+  }
+
+  transforms_.clear();
+  std::stringstream info_stream;
+  info_stream << "Watching the following tf transforms:\n";
+  for (size_t i = 0; i < source_frames.size(); ++i) {
+    if (timeouts[i] <= 0.0) {
+        RCLCPP_WARN(this->get_logger(), "Timeout for %s -> %s is non-positive (%.2f), using default 1.0s",
+                    source_frames[i].c_str(), target_frames[i].c_str(), timeouts[i]);
+        timeouts[i] = 1.0;
+    }
+    transforms_.emplace_back(source_frames[i], target_frames[i], timeouts[i]);
+    info_stream << "> " << source_frames[i] << " -> " << target_frames[i]
+                << " | timeout: " << timeouts[i] << "s\n";
+  }
+
+  RCLCPP_INFO(this->get_logger(), info_stream.str().c_str());
+
+  if (transforms_.empty()) {
+      RCLCPP_WARN(this->get_logger(), "No valid TF transforms configured to check.");
+  }
+}
+
+void TFChecker::timerCallback() // No event argument
+{
+  diagnostic_msgs::msg::DiagnosticArray diag_array;
+  diag_array.header.stamp = this->get_clock()->now();
 
   for (const auto& transform : transforms_)
   {
-    bool status;
-    geometry_msgs::TransformStamped tf_msg;
-    bool transform_found = false;
+    diagnostic_msgs::msg::DiagnosticStatus diag_status;
+    diag_status.name = "tf::" + transform.source_frame + "->" + transform.target_frame;
 
-    // Check if transform exists
+    bool status = false; // Default to error
+    geometry_msgs::msg::TransformStamped tf_msg;
+    bool transform_found = false;
+    bool is_static = false;
+    rclcpp::Duration dt = rclcpp::Duration(0, 0);
+    std::string error_string;
+
     try
     {
-      tf_msg = tf_buffer_.lookupTransform(transform.source_frame, transform.target_frame, ros::Time(0));
+      // Use tf2::TimePointZero for latest available transform
+      tf_msg = tf_buffer_->lookupTransform(transform.target_frame, transform.source_frame, tf2::TimePointZero);
       transform_found = true;
-    }
-    catch (...)
-    {
-      status = false;
-    }
 
-    // If transform exists, check time stamp
-    bool is_static = false;
-    ros::Duration dt;
-    if (transform_found)
-    {
-      // tf_static msgs always have stamp 0
-      if (tf_msg.header.stamp == ros::Time(0))
-      {
+      // Check if static (stamp is zero)
+      if (tf_msg.header.stamp == rclcpp::Time(0, 0, this->get_clock()->get_clock_type())) {
         is_static = true;
-        status = true;
+        status = true; // Static transforms are always considered OK if found
+        diag_status.message = "OK (static)";
       }
-      // for non static msgs check time since last update
       else
       {
-        dt = event.current_expected - tf_msg.header.stamp;
-        status = dt <= transform.timeout;
+        // Check timestamp for non-static transforms
+        dt = rclcpp::Time(diag_array.header.stamp) - rclcpp::Time(tf_msg.header.stamp);
+        if (dt >= rclcpp::Duration(0, 0) && dt <= transform.timeout) {
+            status = true;
+            diag_status.message = "OK";
+        } else if (dt < rclcpp::Duration(0, 0)) {
+            status = false;
+            diag_status.message = "Transform is from the future!";
+            RCLCPP_WARN(this->get_logger(), "Transform %s -> %s has future timestamp! Current: %f, Transform: %f",
+                        transform.source_frame.c_str(), transform.target_frame.c_str(),
+                        rclcpp::Time(diag_array.header.stamp).seconds(), rclcpp::Time(tf_msg.header.stamp).seconds());
+        } else {
+            status = false;
+            diag_status.message = "Last message received " + std::to_string(rclcpp::Duration(dt).seconds()) + " seconds ago";
+        }
       }
     }
-
-    // Fill status message
-    diagnostic_msgs::DiagnosticStatus diag_status;
-    diag_status.name = "tf::" + transform.source_frame + "->" + transform.target_frame;
-    diag_status.level = status ? diagnostic_msgs::DiagnosticStatus::OK : diagnostic_msgs::DiagnosticStatus::ERROR;
-    if (status)
-      diag_status.message = "OK";
-    else if (transform_found)
-      diag_status.message = "Last message received " + std::to_string(int(dt.toSec())) + " seconds ago";
-    else
+    catch (const tf2::TransformException & ex)
+    {
+      transform_found = false;
+      status = false;
       diag_status.message = "Transform not available";
-    if (is_static)
-      diag_status.message += " (static)";
+      error_string = ex.what();
+      RCLCPP_DEBUG(this->get_logger(), "TF lookup failed for %s -> %s: %s",
+                    transform.source_frame.c_str(), transform.target_frame.c_str(), error_string.c_str());
+    }
 
-    diagnostic_msgs::KeyValue kv;
+    // Set diagnostic level
+    diag_status.level = status ? diagnostic_msgs::msg::DiagnosticStatus::OK : diagnostic_msgs::msg::DiagnosticStatus::ERROR;
+
+    // Add key-value pairs
+    diagnostic_msgs::msg::KeyValue kv;
     kv.key = "source frame";
     kv.value = transform.source_frame;
     diag_status.values.push_back(kv);
@@ -136,24 +160,34 @@ void TFChecker::timerCallback(const ros::TimerEvent& event)
       kv.key = "static";
       kv.value = is_static ? "true" : "false";
       diag_status.values.push_back(kv);
-      kv.key = "last msg";
-      kv.value = std::to_string(int(dt.toSec())) + " seconds ago";
-      diag_status.values.push_back(kv);
+      if (!is_static) {
+          kv.key = "last update (sec ago)";
+          kv.value = std::to_string(rclcpp::Duration(dt).seconds());
+          diag_status.values.push_back(kv);
+      }
+    } else {
+        kv.key = "error";
+        kv.value = error_string; // Add TF exception message if lookup failed
+        diag_status.values.push_back(kv);
     }
 
     diag_array.status.push_back(diag_status);
   }
 
-  // Publish array
-  diag_array.header.stamp = event.current_expected;
-  diagnostics_pub_.publish(diag_array);
+  // Publish array if there are any statuses
+  if (!diag_array.status.empty()) {
+    diagnostics_pub_->publish(diag_array);
+  }
 }
-}  // namespace hector_software_monitor
+
+} // namespace hector_software_monitor
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "tf_checker");
-  hector_software_monitor::TFChecker tf_checker;
-  ros::spin();
+  rclcpp::init(argc, argv);
+  // Instantiate the node using make_shared
+  auto tf_checker_node = std::make_shared<hector_software_monitor::TFChecker>();
+  rclcpp::spin(tf_checker_node); // Spin the node
+  rclcpp::shutdown();
   return 0;
 }

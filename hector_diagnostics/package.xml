@@ -23,9 +23,6 @@
   <!-- The *_depend tags are used to specify dependencies -->
   <!-- Dependencies can be catkin packages or system dependencies -->
   <buildtool_depend>catkin</buildtool_depend>
-  <exec_depend>hector_diagnostic_msgs</exec_depend>
-  <exec_depend>hector_timing</exec_depend>
-  <exec_depend>system_monitor</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

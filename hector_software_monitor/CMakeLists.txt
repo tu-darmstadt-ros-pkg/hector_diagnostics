@@ -1,64 +1,83 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.8)
 project(hector_software_monitor)
 
-## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+# Set C++ standard
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
 
-## Find catkin macros and libraries
-## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
-## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS roscpp topic_tools tf2_ros diagnostic_aggregator diagnostic_msgs pluginlib)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-catkin_package(
-  INCLUDE_DIRS include
-  LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp diagnostic_aggregator diagnostic_msgs pluginlib
-)
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(topic_tools REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(diagnostic_aggregator REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
+find_package(pluginlib REQUIRED)
 
-include_directories(include ${catkin_INCLUDE_DIRS})
+# Define sources and headers
+file(GLOB SOURCES "src/*.cpp")
+file(GLOB HEADERS "include/${PROJECT_NAME}/*.h")
 
-## Specify additional locations of header files
-set(HEADERS
-  include/${PROJECT_NAME}/analyzers/simple_analyzer.h
-  include/${PROJECT_NAME}/topic_frequency_checker.h
-)
-
-set(SOURCES
-  src/analyzers/simple_analyzer.cpp
-)
-
-## Declare a cpp library
+# Library
 add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
+ament_target_dependencies(${PROJECT_NAME} PUBLIC
+  rclcpp
+  topic_tools
+  tf2_ros
+  diagnostic_aggregator
+  diagnostic_msgs
+  pluginlib
+)
+target_include_directories(${PROJECT_NAME} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
 
-## Declare a cpp executable
+# Executables
 add_executable(active_nodes_checker src/active_nodes_checker.cpp)
-add_executable(topic_frequency_checker src/topic_frequency_checker.cpp)
+# Link against the local library target and external dependencies
+target_link_libraries(active_nodes_checker PUBLIC ${PROJECT_NAME})
+ament_target_dependencies(active_nodes_checker PUBLIC rclcpp)
+
 add_executable(tf_checker src/tf_checker.cpp)
+# Link against the local library target and external dependencies
+target_link_libraries(tf_checker PUBLIC ${PROJECT_NAME})
+ament_target_dependencies(tf_checker PUBLIC rclcpp)
 
-## Add cmake target dependencies of the executable/library
-## as an example, message headers may need to be generated before nodes
-add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
-
-## Specify libraries to link a library or executable target against
-set_target_properties(${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE CXX)
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
-target_link_libraries(active_nodes_checker ${PROJECT_NAME})
-target_link_libraries(topic_frequency_checker ${PROJECT_NAME})
-target_link_libraries(tf_checker ${PROJECT_NAME})
-
-install(TARGETS ${PROJECT_NAME} active_nodes_checker tf_checker topic_frequency_checker
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# Install Library
+install(TARGETS ${PROJECT_NAME}
+  EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
-## Mark cpp header files for installation
-install(DIRECTORY include/${PROJECT_NAME}/
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-  FILES_MATCHING PATTERN "*.h"
+# Install Executables
+install(TARGETS active_nodes_checker tf_checker
+  DESTINATION lib/${PROJECT_NAME} # Install executables to package-specific lib folder
 )
 
-install(FILES
-  analyzer_plugins.xml
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+# Install Headers
+install(DIRECTORY include/
+  DESTINATION include
 )
+
+# Export targets for downstream packages
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+
+# Export dependencies
+ament_export_dependencies(
+  rclcpp
+  topic_tools
+  tf2_ros
+  diagnostic_aggregator
+  diagnostic_msgs
+  pluginlib
+)
+
+# Declare package
+ament_package()
