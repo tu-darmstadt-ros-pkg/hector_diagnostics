@@ -1,0 +1,9 @@
+/**:
+  ros__parameters:
+    active_nodes:
+      - "robot_state_publisher"
+      - "joint_state_publisher"
+      - "rviz2"
+      - "map_server"
+      - "nav2_controller"
+      - "tf_checker"  # Another node from the same package 
