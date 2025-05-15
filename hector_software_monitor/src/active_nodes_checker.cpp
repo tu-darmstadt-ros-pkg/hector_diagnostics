@@ -9,49 +9,55 @@
 #include <memory>
 #include <algorithm>
 
-int main(int argc, char** argv)
+class ActiveNodesChecker : public rclcpp::Node
 {
-  rclcpp::init(argc, argv);
-  auto node = rclcpp::Node::make_shared("active_nodes_checker");
+public:
+  ActiveNodesChecker() : Node("active_nodes_checker")
+  {
+    diagnostics_publisher_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10);
 
-  auto diagnostics_publisher = node->create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10);
+    // Declare and get parameters
+    this->declare_parameter<std::vector<std::string>>("active_nodes", std::vector<std::string>());
+    std::vector<std::string> nodes_to_be_checked;
 
-  // Declare and get parameters
-  node->declare_parameter<std::vector<std::string>>("active_nodes", std::vector<std::string>());
-  std::vector<std::string> nodes_to_be_checked;
+    // Add a small delay to allow parameters to be set externally, if necessary.
+    // In a real scenario, consider using parameter services or waiting for parameter events.
+    RCLCPP_INFO(this->get_logger(), "Waiting briefly for parameters...");
+    rclcpp::Rate param_wait_rate(2.0); // Check twice a second
+    for (int i = 0; i < 5 && rclcpp::ok(); ++i) { // Wait up to 2.5 seconds
+        if (this->get_parameter("active_nodes", nodes_to_be_checked)) {
+            if (!nodes_to_be_checked.empty()) {
+               break;
+            }
+        }
+        param_wait_rate.sleep();
+    }
 
-  // Add a small delay to allow parameters to be set externally, if necessary.
-  // In a real scenario, consider using parameter services or waiting for parameter events.
-  RCLCPP_INFO(node->get_logger(), "Waiting briefly for parameters...");
-  rclcpp::Rate param_wait_rate(2.0); // Check twice a second
-  for (int i = 0; i < 5 && rclcpp::ok(); ++i) { // Wait up to 2.5 seconds
-      if (node->get_parameter("active_nodes", nodes_to_be_checked)) {
-          if (!nodes_to_be_checked.empty()) {
-             break;
-          }
-      }
-      param_wait_rate.sleep();
+    if (nodes_to_be_checked.empty())
+    {
+      RCLCPP_ERROR(this->get_logger(), "[ActiveNodesChecker] Could not get non-empty \"active_nodes\" parameter.");
+      rclcpp::shutdown();
+      return;
+    }
+
+    nodes_to_be_checked_ = nodes_to_be_checked;
+
+    // Print loaded params
+    std::stringstream ss;
+    for (const auto& node_name : nodes_to_be_checked_)
+      ss << std::endl << "> " << node_name;
+    RCLCPP_INFO(this->get_logger(), "[ActiveNodesChecker] Checking following nodes:%s", ss.str().c_str());
+
+    // Create timer that triggers at 1Hz
+    timer_ = this->create_wall_timer(
+      std::chrono::seconds(1),
+      std::bind(&ActiveNodesChecker::check_nodes, this));
   }
 
-
-  if (nodes_to_be_checked.empty())
+private:
+  void check_nodes()
   {
-    RCLCPP_ERROR(node->get_logger(), "[ActiveNodesChecker] Could not get non-empty \"active_nodes\" parameter.");
-    rclcpp::shutdown();
-    return 1;
-  }
-
-  // Print loaded params
-  std::stringstream ss;
-  for (const auto& node_name : nodes_to_be_checked)
-    ss << std::endl << "> " << node_name;
-  RCLCPP_INFO(node->get_logger(), "[ActiveNodesChecker] Checking following nodes:%s", ss.str().c_str());
-
-  rclcpp::Rate rate(1.0); // 1 Hz
-
-  while (rclcpp::ok())
-  {
-    std::vector<std::string> active_nodes = node->get_node_names();
+    std::vector<std::string> active_nodes = this->get_node_names();
 
     // get_node_names() returns fully qualified names like /namespace/node_name
     // We might need to adjust the comparison logic depending on how names are provided in the parameter.
@@ -59,9 +65,9 @@ int main(int argc, char** argv)
     // and compares against the base name part of the active nodes.
 
     diagnostic_msgs::msg::DiagnosticArray diagnostic_array;
-    diagnostic_array.header.stamp = node->get_clock()->now();
+    diagnostic_array.header.stamp = this->get_clock()->now();
 
-    for (const std::string& target_node_base_name : nodes_to_be_checked)
+    for (const std::string& target_node_base_name : nodes_to_be_checked_)
     {
       diagnostic_msgs::msg::DiagnosticStatus diagnostic_status;
       std::string target_node_check_name = target_node_base_name;
@@ -88,7 +94,6 @@ int main(int argc, char** argv)
           }
       }
 
-
       if (found)
       {
         diagnostic_status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
@@ -109,12 +114,19 @@ int main(int argc, char** argv)
       diagnostic_array.status.push_back(diagnostic_status);
     }
 
-    diagnostics_publisher->publish(diagnostic_array);
-
-    // No spinOnce needed, Rate handles the loop timing
-    rate.sleep();
+    diagnostics_publisher_->publish(diagnostic_array);
   }
 
+  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_publisher_;
+  rclcpp::TimerBase::SharedPtr timer_;
+  std::vector<std::string> nodes_to_be_checked_;
+};
+
+int main(int argc, char** argv)
+{
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<ActiveNodesChecker>();
+  rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
 }
