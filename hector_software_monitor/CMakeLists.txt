@@ -48,6 +48,11 @@ add_executable(tf_checker src/tf_checker.cpp)
 target_link_libraries(tf_checker PUBLIC ${PROJECT_NAME})
 ament_target_dependencies(tf_checker PUBLIC rclcpp)
 
+add_executable(topic_types_checker src/topic_types_checker.cpp)
+# Link against the local library target and external dependencies
+target_link_libraries(topic_types_checker PUBLIC ${PROJECT_NAME})
+ament_target_dependencies(topic_types_checker PUBLIC rclcpp)
+
 # Install Library
 install(TARGETS ${PROJECT_NAME}
   EXPORT export_${PROJECT_NAME}
@@ -57,7 +62,7 @@ install(TARGETS ${PROJECT_NAME}
 )
 
 # Install Executables
-install(TARGETS active_nodes_checker tf_checker
+install(TARGETS active_nodes_checker tf_checker topic_types_checker
   DESTINATION lib/${PROJECT_NAME} # Install executables to package-specific lib folder
 )
 
