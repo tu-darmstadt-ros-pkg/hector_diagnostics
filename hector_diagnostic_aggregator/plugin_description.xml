@@ -1,0 +1,7 @@
+<library path="diagnostic_aggregator_analyzers" >
+  <class name="diagnostic_aggregator/HardwareAnalyzer" type="diagnostic_aggregator::HardwareAnalyzer" base_class_type="diagnostic_aggregator::Analyzer">
+    <description>
+      HardwareAnalyzer filters by hardware_id.
+    </description>
+  </class>  
+</library>
