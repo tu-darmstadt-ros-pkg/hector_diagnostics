@@ -14,12 +14,13 @@
 #include <vector>
 
 #include "diagnostic_aggregator/analyzer.hpp"
-#include "diagnostic_aggregator/generic_analyzer_base.hpp"
 #include "diagnostic_aggregator/status_item.hpp"
 #include "diagnostic_aggregator/visibility_control.hpp"
 
 #include "diagnostic_msgs/msg/diagnostic_status.h"
 #include "diagnostic_msgs/msg/key_value.h"
+
+#include "hector_diagnostic_aggregator/hardware_analyzer_base.hpp"
 
 #include "pluginlib/class_list_macros.hpp"
 
@@ -55,7 +56,7 @@ inline bool getParamVals(rclcpp::Parameter param, std::vector<std::string> & out
 }
 
 
-class HardwareAnalyzer : public GenericAnalyzerBase
+class HardwareAnalyzer : public HardwareAnalyzerBase
 {
 public:
 

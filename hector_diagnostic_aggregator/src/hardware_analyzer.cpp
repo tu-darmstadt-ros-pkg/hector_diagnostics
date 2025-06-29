@@ -44,6 +44,13 @@ bool HardwareAnalyzer::init(
     string pname = param.first;
     rclcpp::Parameter pvalue = param.second;
 
+    if (pname.compare("hardware_id") == 0) {
+      RCLCPP_DEBUG(
+        rclcpp::get_logger("HardwareAnalyzer"), "HardwareAnalyzer '%s' found hardware_id: %s",
+        nice_name_.c_str(), pvalue.value_to_string().c_str());
+      hardware_id_ = pvalue.as_string();
+    }
+
     if (pname.compare("path") == 0) {
       RCLCPP_DEBUG(
         rclcpp::get_logger("HardwareAnalyzer"), "HardwareAnalyzer '%s' found path: %s",
@@ -51,15 +58,15 @@ bool HardwareAnalyzer::init(
       nice_name_ = pvalue.as_string();
     } else if (pname.compare("find_and_remove_prefix") == 0) {
       RCLCPP_DEBUG(
-        rclcpp::get_logger("HardwareAnalyzer"),
-        "HardwareAnalyzer '%s' found find_and_remove_prefix: %s", nice_name_.c_str(),
+        rclcpp::get_logger("GenericAnalyzer"),
+        "GenericAnalyzer '%s' found find_and_remove_prefix: %s", nice_name_.c_str(),
         pvalue.value_to_string().c_str());
       vector<string> output = pvalue.as_string_array();
       chaff_ = output;
       startswith_ = output;
     } else if (pname.compare("remove_prefix") == 0) {
       RCLCPP_DEBUG(
-        rclcpp::get_logger("HardwareAnalyzer"), "HardwareAnalyzer '%s' found remove_prefix: %s",
+        rclcpp::get_logger("GenericAnalyzer"), "GenericAnalyzer '%s' found remove_prefix: %s",
         nice_name_.c_str(), pvalue.value_to_string().c_str());
       chaff_ = pvalue.as_string_array();
     } else if (pname.compare("startswith") == 0) {
@@ -118,7 +125,7 @@ bool HardwareAnalyzer::init(
     expected_.size() == 0 && regex_.size() == 0)
   {
     RCLCPP_ERROR(
-      rclcpp::get_logger("generic_analyzer"),
+      rclcpp::get_logger("hardware_analyzer"),
       "HardwareAnalyzer '%s' was not initialized with any way of checking diagnostics."
       "Name: %s, namespace: %s",
       nice_name_.c_str(), path.c_str(), n->get_namespace());
@@ -141,7 +148,7 @@ bool HardwareAnalyzer::init(
     my_path = "/" + my_path;
   }
 
-  return GenericAnalyzerBase::init(path_, breadcrumb_, timeout, num_items_expected, discard_stale);
+  return HardwareAnalyzerBase::init(path_, breadcrumb_, timeout, num_items_expected, discard_stale);
 }
 
 HardwareAnalyzer::~HardwareAnalyzer() {}
@@ -153,6 +160,11 @@ bool HardwareAnalyzer::match(const string & name)
     name.c_str());
 
   std::cmatch what;
+  // for (unsigned int i = 0; i < hardware_id_.size(); ++i) {
+  //   if (name == hardware_id_[i]) {
+  //     RCLCPP_INFO(  
+
+
   for (unsigned int i = 0; i < regex_.size(); ++i) {
     if (std::regex_match(name.c_str(), what, regex_[i])) {
       RCLCPP_INFO(
@@ -206,7 +218,7 @@ vector<std::shared_ptr<diagnostic_msgs::msg::DiagnosticStatus>> HardwareAnalyzer
   RCLCPP_DEBUG(rclcpp::get_logger("HardwareAnalyzer"), "Analyzer '%s' report()", nice_name_.c_str());
 
   vector<std::shared_ptr<diagnostic_msgs::msg::DiagnosticStatus>> processed =
-    GenericAnalyzerBase::report();
+    HardwareAnalyzerBase::report();
 
   // Check and make sure our expected names haven't been removed ...
   vector<string> expected_names_missing;
