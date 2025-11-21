@@ -54,9 +54,23 @@ void TFChecker::declareParameters()
 
 void TFChecker::loadParameters()
 {
-  std::vector<std::string> source_frames = this->get_parameter("tf_source_frames").as_string_array();
-  std::vector<std::string> target_frames = this->get_parameter("tf_target_frames").as_string_array();
-  std::vector<double> timeouts = this->get_parameter("tf_timeouts").as_double_array();
+  std::vector<std::string> source_frames;
+  std::vector<std::string> target_frames;
+  std::vector<double> timeouts;
+
+  // Add a small delay to allow parameters to be set externally, if necessary.
+  // In a real scenario, consider using parameter services or waiting for parameter events.
+  RCLCPP_INFO( this->get_logger(), "Waiting briefly for parameters..." );
+  rclcpp::Rate param_wait_rate( 2.0 );            // Check twice a second
+  for ( int i = 0; i < 5 && rclcpp::ok(); ++i ) { // Wait up to 2.5 seconds
+    source_frames = this->get_parameter("tf_source_frames").as_string_array();
+    target_frames = this->get_parameter("tf_target_frames").as_string_array();
+    timeouts = this->get_parameter("tf_timeouts").as_double_array();
+    if (!source_frames.empty()) {
+        break;
+    }
+    param_wait_rate.sleep();
+  }
 
   if (source_frames.size() != target_frames.size() || source_frames.size() != timeouts.size()) {
     RCLCPP_ERROR(this->get_logger(),
