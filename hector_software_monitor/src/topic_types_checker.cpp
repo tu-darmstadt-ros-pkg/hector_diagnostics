@@ -26,7 +26,7 @@ private:
     auto topic_names_and_types = this->get_topic_names_and_types();
     diagnostic_msgs::msg::DiagnosticArray diagnostic_array;
     diagnostic_msgs::msg::DiagnosticStatus status;
-    status.name = "TopicTypeCheck";
+    status.name = "topic_types_check";
     status.hardware_id = "topic_types_checker";
     diagnostic_array.header.stamp = this->get_clock()->now();
 
