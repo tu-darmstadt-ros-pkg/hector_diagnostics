@@ -19,21 +19,18 @@ find_package(diagnostic_aggregator REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 
-# Define sources and headers
-file(GLOB SOURCES "src/*.cpp")
-file(GLOB HEADERS "include/${PROJECT_NAME}/*.h")
-
-# Library
-add_library(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-ament_target_dependencies(${PROJECT_NAME} PUBLIC
-  rclcpp
-  topic_tools
-  tf2_ros
-  diagnostic_aggregator
-  diagnostic_msgs
-  pluginlib
+# Header-only interface library carrying include dirs and dependencies. Every source file in src/
+# defines its own main() and is built as a separate executable below, so they must not be compiled
+# into a shared library (duplicate main() fails to link with LTO).
+add_library(${PROJECT_NAME} INTERFACE)
+target_link_libraries(${PROJECT_NAME} INTERFACE
+  rclcpp::rclcpp
+  tf2_ros::tf2_ros
+  diagnostic_aggregator::diagnostic_aggregator
+  ${diagnostic_msgs_TARGETS}
+  pluginlib::pluginlib
 )
-target_include_directories(${PROJECT_NAME} PUBLIC
+target_include_directories(${PROJECT_NAME} INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
@@ -41,27 +38,27 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 add_executable(active_nodes_checker src/active_nodes_checker.cpp)
 # Link against the local library target and external dependencies
 target_link_libraries(active_nodes_checker PUBLIC ${PROJECT_NAME})
-ament_target_dependencies(active_nodes_checker PUBLIC rclcpp)
+target_link_libraries(active_nodes_checker PUBLIC rclcpp::rclcpp)
 
 add_executable(active_topics_checker src/active_topics_checker.cpp)
 # Link against the local library target and external dependencies
 target_link_libraries(active_topics_checker PUBLIC ${PROJECT_NAME})
-ament_target_dependencies(active_topics_checker PUBLIC rclcpp)
+target_link_libraries(active_topics_checker PUBLIC rclcpp::rclcpp)
 
 add_executable(tf_checker src/tf_checker.cpp)
 # Link against the local library target and external dependencies
 target_link_libraries(tf_checker PUBLIC ${PROJECT_NAME})
-ament_target_dependencies(tf_checker PUBLIC rclcpp)
+target_link_libraries(tf_checker PUBLIC rclcpp::rclcpp)
 
 add_executable(topic_types_checker src/topic_types_checker.cpp)
 # Link against the local library target and external dependencies
 target_link_libraries(topic_types_checker PUBLIC ${PROJECT_NAME})
-ament_target_dependencies(topic_types_checker PUBLIC rclcpp)
+target_link_libraries(topic_types_checker PUBLIC rclcpp::rclcpp)
 
 add_executable(topic_frequency_checker src/topic_frequency_checker.cpp)
 # Link against the local library target and external dependencies
 target_link_libraries(topic_frequency_checker PUBLIC ${PROJECT_NAME})
-ament_target_dependencies(topic_frequency_checker PUBLIC rclcpp)
+target_link_libraries(topic_frequency_checker PUBLIC rclcpp::rclcpp)
 
 # Install Library
 install(TARGETS ${PROJECT_NAME}

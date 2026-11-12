@@ -26,10 +26,10 @@ target_include_directories(${PROJECT_NAME}_analyzers PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-ament_target_dependencies(${PROJECT_NAME}_analyzers PUBLIC
-  diagnostic_aggregator
-  pluginlib
-  rclcpp
+target_link_libraries(${PROJECT_NAME}_analyzers PUBLIC
+  diagnostic_aggregator::diagnostic_aggregator
+  pluginlib::pluginlib
+  rclcpp::rclcpp
 )
 # prevent pluginlib from using boost
 target_compile_definitions(${PROJECT_NAME}_analyzers PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")

@@ -1,5 +1,5 @@
 #include <hector_software_monitor/tf_checker.h>
-#include <tf2/exceptions.h>
+#include <tf2/exceptions.hpp>
 #include <rcl_interfaces/msg/parameter_descriptor.hpp>
 #include <rclcpp/parameter_map.hpp>
 
